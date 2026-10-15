@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: exportiq_postgres
+    environment:
+      POSTGRES_USER: exportiq
+      POSTGRES_PASSWORD: exportiq_pass
+      POSTGRES_DB: exportiq_db
+    ports:
+      - "5433:5432"  # mapped to 5433 to avoid conflict with local PostgreSQL on 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exportiq -d exportiq_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: exportiq_backend
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=postgresql+psycopg2://exportiq:exportiq_pass@postgres:5432/exportiq_db
+      - ASYNC_DATABASE_URL=postgresql+asyncpg://exportiq:exportiq_pass@postgres:5432/exportiq_db
+      - SECRET_KEY=change-me-to-a-secure-random-secret-key-at-least-32-chars
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  frontend:
+    build: ./frontend
+    container_name: exportiq_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: always
+
+volumes:
+  postgres_data:
+  backend_uploads:
